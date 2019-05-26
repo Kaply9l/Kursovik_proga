@@ -14,8 +14,8 @@ int main(int argc, char **argv)
     int key;
     //opterr = 0; // запретить вывод ошибок от getopt()
 
-    /* s-Save integrity info; c-check integrity info;
-     * */
+    // s-Save integrity info; c-check integrity info;
+
     while ((key = getopt(argc, argv, "scrf:")) != -1) {
         switch (key) {
             default:
