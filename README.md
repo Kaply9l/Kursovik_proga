@@ -12,3 +12,4 @@
 * -f data full_path - путь до data, полный путь до директории
 * -r - позволяет рекурсивно проверять/сохранять вложенные дирекории
 
+[![Build Status](https://travis-ci.com/Kaply9l/Kursovik_proga.svg?branch=master)](https://travis-ci.com/Kaply9l/Kursovik_proga)
