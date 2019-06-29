@@ -1,28 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <unistd.h>
-#include "hash.h"
-#include "stat.h"
-
-
-int save_dir_list(char *dir, char *parent, int mode);
-int check_dir_list(char *dat);
-int check_path(char *path);
-int save_info(char *file, char **output);
-
-
-FILE *f = NULL;
-
-typedef struct _data {
-	char name[261];
-	char type[5];
-	char parent_dir[4096];
-	char hash[64];
-
-}DATA;
+#include "integ.h"
 
 int main(int argc, char **argv)
 {
@@ -35,6 +11,7 @@ int main(int argc, char **argv)
     }
 
     int key, mode = 0, recursive = 0, file_count = 0;
+    int i;
     char *data = NULL;
     char *path = NULL;
 
@@ -64,8 +41,8 @@ int main(int argc, char **argv)
 					return 5;
 				}
 				mode += 2;
+				break;
 			}
-			break;
 			case 'r': {
 				if (recursive != 0) {
 					fprintf(stderr, "You use -r more than one time\n");
@@ -112,15 +89,13 @@ int main(int argc, char **argv)
 		return 13;
 	}
 
+    //~ DATA origin_dir;
+    //~ strcpy(origin_dir.name, path);
     if (mode == 1) { // Save information
 		f = fopen(data, "wb");
-		DATA parent;
-		strcpy(parent.name, path);
-		strcpy(parent.type, "dir");
-		strcpy(parent.parent_dir, "");
-		strcpy(parent.hash, "");
-		// fprintf(f, "%s %s %s %s\n", parent.name, parent.type, parent.parent_dir, parent.hash);
-		fwrite(&parent, sizeof(parent), 1, f);
+		fwrite(&recursive, sizeof(int), 1, f);
+		//~ fwrite(&origin_dir, sizeof(DATA), 1, f);
+
         if (save_dir_list(path, path, recursive) == 69){
             printf("Oops\n");
             return 69;
@@ -131,101 +106,46 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Your data is not exsist\n");
 			return 11;
 		}
-		printf("mode %s\n", "Check infromation");
-		check_dir_list(data);
+
+		int check;
+		fread(&check, sizeof(int), 1, f);
+		if (check != recursive) {
+			fprintf(stderr, "Incorrect recursive mod\n");
+			return 88;
+		}
+
+		//~ fread(&origin_dir, sizeof(DATA), 1, f);
+		//~ if (strcmp(origin_dir.name, path) != 0) {
+			//~ fprintf(stderr, "Your path is not origin to data\n");
+			//~ return 300;
+		//~ }
+
+		struct stat buff;
+		stat(data, &buff);
+		int i;
+		count = (buff.st_size - sizeof(int)) / sizeof(DATA);
+		info = malloc(sizeof(DATA) * count);
+		for (i = 0; i < count; i++)  {
+			fread(&info[i], sizeof(DATA), 1, f);
+			// printf("%s %s %s %s\n", info[i].name, info[i].type, info[i].parent_dir, info[i].hash);
+		}
+		if(strcmp(info[0].parent_dir, path) != 0) {
+			fprintf(stderr, "%s Your origin dir is %s\"%s\"%s\n", WHITE, RED, info[0].name, RESET);
+			return 300;
+		}
+
+		check_dir_list(path, path, recursive);
 	} else {
-		fprintf(stderr, "Incorrect mode\n");
-		return 8;
+			fprintf(stderr, "Incorrect mode\n");
+			return 8;
 	}
 
+	for (i = 0; i < count; i++) {
+		if (strcmp(info[i].name, "|") != 0)
+			fprintf(stderr, "%s %s is DELETED\n", info[i].name, info[i].type);
+	}
+
+	free(info);
     fclose(f);
     return 0;
-}
-
-int save_dir_list(char *path, char *parent, int mode)
-{
-	int n;
-	DATA file, d;
-	DIR *dir; // Директория
-    struct dirent *entry;// Элемент директории
-    char new_path[PATH_MAX];
-	dir = opendir(path);
-    if (!dir) {
-		fprintf(stderr, "Incorrect path of directory\n");
-		return 69;
-	}
-
-	while ((entry = readdir(dir)) != NULL) {
-		if ((entry->d_type == 4) && (strcmp(entry->d_name, ".") != 0) && // If this's directory
-			(strcmp(entry->d_name, "..")) != 0) {
-
-			n = strlen(path) - 1;
-			while (path[n] == '/') { // Delete slashes
-				path[n] = '\0';
-				n--;
-			}
-			strcpy(d.name, entry->d_name);
-			strcpy(d.type, "dir");
-			strcpy(d.parent_dir, parent);
-			strcpy(d.hash, "");
-			snprintf(new_path, PATH_MAX, "%s/%s", path, entry->d_name); // Create the path for the directory
-			// printf("Directory %d %s\n", parent, new_path);
-			// fprintf(f, "%s %s %s %s\n", d.name, d.type, d.parent_dir, d.hash);
-			fwrite(&d, sizeof(d), 1, f);
-			if (mode == 1)
-				save_dir_list(new_path, new_path, mode); // Read new the path
-		} else if ((strcmp(entry->d_name, ".") != 0) && // Do something if it is not dot or directory
-				   (strcmp(entry->d_name, "..")) != 0) {
-			char *hash = NULL;
-			snprintf(new_path, PATH_MAX, "%s/%s", path, entry->d_name);
-			save_info(new_path, &hash);
-			// printf("File %d %s %s\n", parent, entry->d_name, hash);
-			strcpy(file.name, entry->d_name);
-			strcpy(file.type, "file");
-			strcpy(file.parent_dir, parent);
-			strcpy(file.hash, hash);
-			// fprintf(f, "%s %s %s %s\n", file.name, file.type, file.parent_dir, file.hash);
-			fwrite(&file, sizeof(file), 1, f);
-		}
-	}
-
-	closedir(dir);
-}
-
-int check_dir_list(char *dat)
-{
-	struct stat buff;
-	stat(dat, &buff);
-	int i;
-	int count = buff.st_size / sizeof(DATA);
-	DATA info[count];
-
-	for (i = 0; i < count; i++)  {
-		fread(&info[i], sizeof(info), 1, f);
-		printf("%s %s %s %s\n", info[i].name, info[i].type, info[i].parent_dir, info[i].hash);
-	}
-}
-
-int save_info(char *file, char **output)
-{
-    FILE *f = fopen(file, "r");
-    if (!f) {
-		fprintf(stderr, "can't open file %s\n", file);
-		return 99;
-	}
-    struct stat buff;
-    stat(file, &buff);
-    char *tmp = malloc(sizeof(char) * buff.st_size);
-    fscanf(f, "%s", tmp);
-    hash(tmp, &(*output));
-    fclose(f);
-
-}
-
-int check_path(char *path)
-{
-	if (path[0] == '/')
-		return 0;
-	else
-		return 1;
 }
